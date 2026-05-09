@@ -3,103 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scatter Log | GPS Digital</title>
+    <title>QRally Scatter Master v2.0</title>
     <style>
-        :root { --rally-yellow: #f1c40f; --done: #27ae60; }
-        body { background-color: #1a1a1a; color: white; font-family: sans-serif; margin: 0; padding: 10px; user-select: none; }
-        .header { text-align: center; color: var(--rally-yellow); padding: 15px 0; border-bottom: 2px solid #333; margin-bottom: 10px; font-weight: bold; letter-spacing: 2px; }
-        .route-item { background: #2d2d2d; margin: 10px 0; padding: 20px; border-radius: 10px; border-left: 6px solid var(--rally-yellow); position: relative; display: flex; align-items: center; }
+        :root { --rally-yellow: #f1c40f; --done-green: #2ecc71; --bg: #1a1a1a; }
+        body { background-color: var(--bg); color: white; font-family: sans-serif; margin: 0; padding: 10px; user-select: none; }
         
-        /* Stamped State */
-        .plotted { opacity: 0.3; border-left-color: var(--done); filter: grayscale(1); }
-        .plotted .grid-ref { color: var(--done); }
+        .header-box { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 10px; position: sticky; top: 0; background: var(--bg); z-index: 100; }
+        #event-name { color: var(--rally-yellow); font-size: 1.1rem; font-weight: bold; letter-spacing: 1px; display: block; margin-bottom: 5px; }
+        #score-board { font-size: 2.2rem; font-weight: bold; color: white; margin: 2px 0; }
+        
+        .route-item { background: #2d2d2d; margin: 10px 0; padding: 20px; border-radius: 10px; border-left: 8px solid #444; position: relative; transition: 0.3s; }
+        
+        /* The Green "Visited" State */
+        .visited { border-left-color: var(--done-green); background: #1e3a2a; }
+        .visited .grid-ref { color: var(--done-green); }
 
-        .grid-ref { font-size: 2.2rem; font-weight: bold; font-family: 'Courier New', Courier, monospace; }
+        .grid-ref { font-size: 2.4rem; font-weight: bold; font-family: 'Courier New', Courier, monospace; }
+        .point-value { font-size: 0.9rem; color: #aaa; display: block; text-transform: uppercase; }
         
-        .stamp-time { position: absolute; right: 20px; background: var(--done); padding: 5px 10px; border-radius: 4px; color: white; font-family: monospace; font-weight: bold; }
-        #gps-status { font-size: 0.75rem; color: #666; text-align: center; margin-bottom: 10px; }
+        .stamp-time { position: absolute; right: 15px; top: 15px; background: var(--done-green); color: black; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-weight: bold; font-size: 0.9rem; }
+        
+        #gps-status { font-size: 0.75rem; color: #888; text-align: center; margin-top: 8px; }
+        .accuracy-tag { color: var(--rally-yellow); font-weight: bold; }
+        
+        .reset-area { margin-top: 50px; padding: 20px; text-align: center; }
+        .reset-btn { opacity: 0.15; font-size: 0.7rem; color: #e74c3c; background: none; border: 1px solid #e74c3c; padding: 8px; width: 80%; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-<div class="header">SCATTER PASSAGE LOG</div>
-<div id="gps-status">Awaiting GPS Lock...</div>
-<div id="route-list">Initializing...</div>
+<div class="header-box">
+    <span id="event-name">LOADING SCATTER...</span>
+    <div id="score-board">POINTS: 0</div>
+    <div id="gps-status">Awaiting GPS Lock...</div>
+</div>
+
+<div id="route-list"></div>
+
+<div class="reset-area">
+    <button class="reset-btn" onclick="confirmReset()">HOLD TO RESET SESSION</button>
+</div>
 
 <script>
     let routeData = [];
-    const RADIUS_METERS = 40; 
+    let eventTitle = "Scatter Log";
+    const RADIUS_METERS = 40;
+    let wakeLock = null;
 
-    async function loadRoute() {
+    // 1. INITIALIZE & LOAD DATA
+    async function init() {
         try {
             const response = await fetch('route.json?t=' + Date.now());
             const data = await response.json();
             routeData = data.route;
-            renderList();
-            startTracking();
-        } catch (e) {
-            document.getElementById('route-list').innerHTML = "Check route.json format";
-        }
-    }
-
-    function renderList() {
-        const listContainer = document.getElementById('route-list');
-        listContainer.innerHTML = '';
-
-        routeData.forEach((item, index) => {
-            const div = document.createElement('div');
-            div.className = `route-item ${item.visited ? 'plotted' : ''}`;
+            eventTitle = data.eventName || "Scatter Event";
             
-            div.innerHTML = `
-                <span class="grid-ref">${item.grid}</span>
-                ${item.visited ? `<span class="stamp-time">VISITED: ${item.visitTime}</span>` : ''}
-            `;
+            // Restore visited points from LocalStorage
+            const saved = localStorage.getItem('scatter_v2_progress');
+            if (saved) {
+                const visitedPoints = JSON.parse(saved);
+                visitedPoints.forEach(savedPoint => {
+                    const match = routeData.find(r => r.grid === savedPoint.g);
+                    if (match) {
+                        match.visited = true;
+                        match.visitTime = savedPoint.t;
+                    }
+                });
+            }
 
-            div.addEventListener('dblclick', () => markVisited(index));
-            listContainer.appendChild(div);
-        });
-    }
-
-    function markVisited(index) {
-        if (!routeData[index].visited) {
-            routeData[index].visited = true;
-            routeData[index].visitTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            renderList();
+            render();
+            startTracking();
+            requestWakeLock();
+        } catch (e) { 
+            document.getElementById('route-list').innerHTML = "<div style='color:red; text-align:center;'>JSON LOAD ERROR</div>"; 
         }
     }
 
+    // 2. RENDER THE LIST
+    function render() {
+        document.getElementById('event-name').innerText = eventTitle.toUpperCase();
+        const list = document.getElementById('route-list');
+        let totalPoints = 0;
+        list.innerHTML = '';
+
+        routeData.forEach((item, i) => {
+            if (item.visited) totalPoints += (item.points || 0);
+            
+            const div = document.createElement('div');
+            div.className = `route-item ${item.visited ? 'visited' : ''}`;
+            div.innerHTML = `
+                <span class="point-value">${item.points || 0} POINTS</span>
+                <span class="grid-ref">${item.grid}</span>
+                ${item.visited ? `<span class="stamp-time">@ ${item.visitTime}</span>` : ''}
+            `;
+            
+            // Manual backup for "Clipboard mentality" skeptics
+            div.addEventListener('dblclick', () => markVisited(i));
+            list.appendChild(div);
+        });
+        document.getElementById('score-board').innerText = `POINTS: ${totalPoints}`;
+    }
+
+    // 3. MARK AS VISITED
+    function markVisited(i) {
+        if (!routeData[i].visited) {
+            routeData[i].visited = true;
+            routeData[i].visitTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            saveProgress();
+            render();
+            // Provide a small vibration if device supports it
+            if (navigator.vibrate) navigator.vibrate(200);
+        }
+    }
+
+    function saveProgress() {
+        const toSave = routeData
+            .filter(item => item.visited)
+            .map(item => ({ g: item.grid, t: item.visitTime }));
+        localStorage.setItem('scatter_v2_progress', JSON.stringify(toSave));
+    }
+
+    // 4. GPS TRACKING & DISTANCE
     function startTracking() {
         if (!navigator.geolocation) return;
 
         navigator.geolocation.watchPosition((pos) => {
-            const { latitude, longitude } = pos.coords;
-            document.getElementById('gps-status').innerText = `GPS ACTIVE | Lat: ${latitude.toFixed(4)} Lon: ${longitude.toFixed(4)}`;
+            const { latitude, longitude, accuracy } = pos.coords;
+            
+            document.getElementById('gps-status').innerHTML = 
+                `GPS ACTIVE | Acc: <span class="accuracy-tag">±${Math.round(accuracy)}m</span>`;
 
-            routeData.forEach((point, index) => {
+            routeData.forEach((point, i) => {
                 if (!point.visited && point.coords) {
-                    // Split the string "lat, lon" and convert to numbers
                     const [pLat, pLon] = point.coords.split(',').map(n => parseFloat(n.trim()));
-                    
                     const dist = getDistance(latitude, longitude, pLat, pLon);
+                    
                     if (dist < RADIUS_METERS) {
-                        markVisited(index);
+                        markVisited(i);
                     }
                 }
             });
-        }, null, { enableHighAccuracy: true });
+        }, null, { enableHighAccuracy: true, maximumAge: 0 });
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371000; 
+        const R = 6371000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    loadRoute();
+    // 5. WAKE LOCK (KEEP SCREEN ON)
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) { console.log("WakeLock failed"); }
+        }
+    }
+
+    // Handle re-locking when app is minimized/maximized
+    document.addEventListener('visibilitychange', async () => {
+        if (wakeLock !== null && document.visibilityState === 'visible') {
+            await requestWakeLock();
+        }
+    });
+
+    // 6. UTILS
+    function confirmReset() {
+        if(confirm("THIS WILL WIPE ALL DATA. Are you sure?")) {
+            localStorage.removeItem('scatter_v2_progress');
+            location.reload();
+        }
+    }
+
+    init();
 </script>
 </body>
 </html>
