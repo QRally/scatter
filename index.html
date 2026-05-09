@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scatter Log | GPS Digital</title>
+    <style>
+        :root { --rally-yellow: #f1c40f; --done: #27ae60; }
+        body { background-color: #1a1a1a; color: white; font-family: sans-serif; margin: 0; padding: 10px; user-select: none; }
+        .header { text-align: center; color: var(--rally-yellow); padding: 15px 0; border-bottom: 2px solid #333; margin-bottom: 10px; font-weight: bold; letter-spacing: 2px; }
+        .route-item { background: #2d2d2d; margin: 10px 0; padding: 20px; border-radius: 10px; border-left: 6px solid var(--rally-yellow); position: relative; display: flex; align-items: center; }
+        
+        /* Stamped State */
+        .plotted { opacity: 0.3; border-left-color: var(--done); filter: grayscale(1); }
+        .plotted .grid-ref { color: var(--done); }
+
+        .grid-ref { font-size: 2.2rem; font-weight: bold; font-family: 'Courier New', Courier, monospace; }
+        
+        .stamp-time { position: absolute; right: 20px; background: var(--done); padding: 5px 10px; border-radius: 4px; color: white; font-family: monospace; font-weight: bold; }
+        #gps-status { font-size: 0.75rem; color: #666; text-align: center; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="header">SCATTER PASSAGE LOG</div>
+<div id="gps-status">Awaiting GPS Lock...</div>
+<div id="route-list">Initializing...</div>
+
+<script>
+    let routeData = [];
+    const RADIUS_METERS = 40; 
+
+    async function loadRoute() {
+        try {
+            const response = await fetch('route.json?t=' + Date.now());
+            const data = await response.json();
+            routeData = data.route;
+            renderList();
+            startTracking();
+        } catch (e) {
+            document.getElementById('route-list').innerHTML = "Check route.json format";
+        }
+    }
+
+    function renderList() {
+        const listContainer = document.getElementById('route-list');
+        listContainer.innerHTML = '';
+
+        routeData.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = `route-item ${item.visited ? 'plotted' : ''}`;
+            
+            div.innerHTML = `
+                <span class="grid-ref">${item.grid}</span>
+                ${item.visited ? `<span class="stamp-time">VISITED: ${item.visitTime}</span>` : ''}
+            `;
+
+            div.addEventListener('dblclick', () => markVisited(index));
+            listContainer.appendChild(div);
+        });
+    }
+
+    function markVisited(index) {
+        if (!routeData[index].visited) {
+            routeData[index].visited = true;
+            routeData[index].visitTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            renderList();
+        }
+    }
+
+    function startTracking() {
+        if (!navigator.geolocation) return;
+
+        navigator.geolocation.watchPosition((pos) => {
+            const { latitude, longitude } = pos.coords;
+            document.getElementById('gps-status').innerText = `GPS ACTIVE | Lat: ${latitude.toFixed(4)} Lon: ${longitude.toFixed(4)}`;
+
+            routeData.forEach((point, index) => {
+                if (!point.visited && point.coords) {
+                    // Split the string "lat, lon" and convert to numbers
+                    const [pLat, pLon] = point.coords.split(',').map(n => parseFloat(n.trim()));
+                    
+                    const dist = getDistance(latitude, longitude, pLat, pLon);
+                    if (dist < RADIUS_METERS) {
+                        markVisited(index);
+                    }
+                }
+            });
+        }, null, { enableHighAccuracy: true });
+    }
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000; 
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    loadRoute();
+</script>
+</body>
+</html>
