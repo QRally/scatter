@@ -1,7 +1,7 @@
 {
   "eventName": "Everybody Scatter Rally",
   "route": [
-    { "grid": "SN 311.5 440.5", "coords": "52.0735, -4.4642", "points": 10 },
+    { "grid": "SN 311.5 440.5", "coords": "52.146899,-4.056907", "points": 10 },
     { "grid": "SN 319.5 470.5", "coords": "52.1009, -4.3488", "points": 10 },
     { "grid": "SN 340.5 476", "coords": "52.1065, -4.3185", "points": 5 },
     { "grid": "SN 329 497", "coords": "52.1250, -4.4361", "points": 10 },
