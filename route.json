@@ -1,19 +1,19 @@
 {
   "eventName": "Everybody Scatter Rally",
   "route": [
-    { "grid": "SN 311.5 440.5", "coords": "52.146899,-4.056907", "points": 10 },
-    { "grid": "SN 319.5 470.5", "coords": "52.1009, -4.3488", "points": 10 },
-    { "grid": "SN 340.5 476", "coords": "52.1065, -4.3185", "points": 5 },
+    { "grid": "SN 311 440", "coords": "52.146899,-4.056907", "points": 10 },
+    { "grid": "SN 319 470", "coords": "52.1009, -4.3488", "points": 10 },
+    { "grid": "SN 340 476", "coords": "52.1065, -4.3185", "points": 5 },
     { "grid": "SN 329 497", "coords": "52.1250, -4.4361", "points": 10 },
-    { "grid": "SN 365.5 468.5", "coords": "52.1004, -4.3828", "points": 10 },
-    { "grid": "SN 407.5 447", "coords": "52.0825, -4.3201", "points": 10 },
-    { "grid": "SN 420.5 428", "coords": "52.0658, -4.3005", "points": 10 },
-    { "grid": "SN 438.5 418", "coords": "52.0573, -4.2739", "points": 10 },
+    { "grid": "SN 365 468", "coords": "52.1004, -4.3828", "points": 10 },
+    { "grid": "SN 407 447", "coords": "52.0825, -4.3201", "points": 10 },
+    { "grid": "SN 420 428", "coords": "52.0658, -4.3005", "points": 10 },
+    { "grid": "SN 438 418", "coords": "52.0573, -4.2739", "points": 10 },
     { "grid": "SN 461 395", "coords": "52.0371, -4.2402", "points": 5 },
-    { "grid": "SN 449.5 370", "coords": "52.0144, -4.2561", "points": 10 },
+    { "grid": "SN 449 370", "coords": "52.0144, -4.2561", "points": 10 },
     { "grid": "SN 446 376", "coords": "52.0197, -4.2615", "points": 15 },
     { "grid": "SN 408 361", "coords": "52.0051, -4.3164", "points": 5 },
     { "grid": "SN 410 337", "coords": "51.9836, -4.3126", "points": 5 },
-    { "grid": "SN 451 329.5", "coords": "51.9777, -4.2527", "points": 20 }
+    { "grid": "SN 451 329", "coords": "51.9777, -4.2527", "points": 20 }
   ]
 }
