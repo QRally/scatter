@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>QRally Scatter Master v2.1</title>
+    <title>QRally Scatter Master v3.0</title>
     <style>
         :root { --rally-yellow: #f1c40f; --done-green: #2ecc71; --bg: #1a1a1a; --danger: #e74c3c; }
         body { background-color: var(--bg); color: white; font-family: sans-serif; margin: 0; padding: 10px; user-select: none; overflow-x: hidden; }
         
-        /* Sticky Header */
         .header-box { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 10px; position: sticky; top: 0; background: var(--bg); z-index: 100; }
         #event-name { color: var(--rally-yellow); font-size: 1.1rem; font-weight: bold; letter-spacing: 1px; display: block; margin-bottom: 5px; }
         #score-board { font-size: 2.4rem; font-weight: bold; color: white; margin: 2px 0; }
         
-        /* List Items */
+        /* Audio Test Button */
+        #audio-test { font-size: 0.6rem; color: #666; background: none; border: 1px solid #444; padding: 2px 8px; border-radius: 4px; margin-top: 5px; cursor: pointer; }
+
         .route-item { background: #2d2d2d; margin: 12px 0; padding: 20px; border-radius: 12px; border-left: 10px solid #444; position: relative; transition: background 0.3s; }
         .visited { border-left-color: var(--done-green); background: #1e3a2a; }
         .visited .grid-ref { color: var(--done-green); }
@@ -23,7 +24,6 @@
         
         .stamp-time { position: absolute; right: 15px; top: 15px; background: var(--done-green); color: black; padding: 4px 10px; border-radius: 4px; font-family: monospace; font-weight: bold; font-size: 1rem; }
         
-        /* Status Bar */
         #gps-status { font-size: 0.8rem; color: #aaa; text-align: center; margin-top: 8px; }
         .accuracy-tag { color: var(--rally-yellow); font-weight: bold; }
         
@@ -32,7 +32,6 @@
         .modal-btn-wipe { background: var(--danger); color: white; border: none; padding: 25px 50px; font-size: 1.8rem; border-radius: 15px; font-weight: bold; margin: 15px; width: 80%; }
         .modal-btn-cancel { background: #444; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 10px; margin: 10px; width: 60%; }
 
-        /* Hidden Reset Trigger */
         .reset-area { margin-top: 60px; padding: 20px; text-align: center; }
         .reset-trigger-btn { opacity: 0.2; font-size: 0.8rem; color: var(--danger); background: none; border: 1px solid var(--danger); padding: 10px; width: 100%; border-radius: 8px; }
     </style>
@@ -43,17 +42,18 @@
     <span id="event-name">SCATTER INITIALIZING...</span>
     <div id="score-board">POINTS: 0</div>
     <div id="gps-status">Awaiting GPS Lock...</div>
+    <button id="audio-test" onclick="announceVisit('Test')">TEST AUDIO</button>
 </div>
 
 <div id="route-list"></div>
 
 <div class="reset-area">
-    <button class="reset-trigger-btn" onclick="openResetModal()">TAP TO RESET SESSION</button>
+    <button class="reset-trigger-btn" onclick="openResetModal()">HOLD TO RESET SESSION</button>
 </div>
 
 <div id="reset-modal">
     <h1 style="color:var(--rally-yellow); font-size: 2rem;">WIPE DATA?</h1>
-    <p style="color:#ccc; font-size: 1.1rem; padding: 0 20px;">This clears all visited points and scores for this event.</p>
+    <p style="color:#ccc; font-size: 1.1rem; padding: 0 20px;">This clears all visited points and scores.</p>
     <button class="modal-btn-wipe" onclick="executeReset()">YES - WIPE ALL</button>
     <br>
     <button class="modal-btn-cancel" onclick="closeResetModal()">CANCEL</button>
@@ -65,7 +65,6 @@
     const RADIUS_METERS = 40;
     let wakeLock = null;
 
-    // 1. DATA LOAD & PERSISTENCE
     async function init() {
         try {
             const response = await fetch('route.json?t=' + Date.now());
@@ -78,22 +77,15 @@
                 const visitedPoints = JSON.parse(saved);
                 visitedPoints.forEach(savedPoint => {
                     const match = routeData.find(r => r.grid === savedPoint.g);
-                    if (match) {
-                        match.visited = true;
-                        match.visitTime = savedPoint.t;
-                    }
+                    if (match) { match.visited = true; match.visitTime = savedPoint.t; }
                 });
             }
-
             render();
             startTracking();
             setupWakeLock();
-        } catch (e) { 
-            document.getElementById('route-list').innerHTML = "<div style='color:var(--danger); text-align:center; padding:20px;'>ERROR: route.json missing or invalid</div>"; 
-        }
+        } catch (e) { document.getElementById('route-list').innerHTML = "JSON LOAD ERROR"; }
     }
 
-    // 2. UI RENDERING
     function render() {
         document.getElementById('event-name').innerText = eventTitle.toUpperCase();
         const list = document.getElementById('route-list');
@@ -102,7 +94,6 @@
 
         routeData.forEach((item, i) => {
             if (item.visited) totalPoints += (item.points || 0);
-            
             const div = document.createElement('div');
             div.className = `route-item ${item.visited ? 'visited' : ''}`;
             div.innerHTML = `
@@ -110,50 +101,53 @@
                 <span class="grid-ref">${item.grid}</span>
                 ${item.visited ? `<span class="stamp-time">${item.visitTime}</span>` : ''}
             `;
-            
             div.addEventListener('dblclick', () => markVisited(i));
             list.appendChild(div);
         });
         document.getElementById('score-board').innerText = `POINTS: ${totalPoints}`;
     }
 
-    // 3. ACTION LOGIC
+    // --- AUDIO NOTIFICATION LOGIC ---
+    function announceVisit(pts) {
+        if (!window.speechSynthesis) return;
+        const msg = pts === 'Test' ? "Audio check. Loud and clear." : `Point recorded. ${pts} points.`;
+        const utterance = new SpeechSynthesisUtterance(msg);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+    }
+
     function markVisited(i) {
         if (!routeData[i].visited) {
             routeData[i].visited = true;
             routeData[i].visitTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            // Trigger Audio & Vibrate
+            announceVisit(routeData[i].points || 0);
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+            
             saveProgress();
             render();
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
         }
     }
 
     function saveProgress() {
-        const toSave = routeData
-            .filter(item => item.visited)
-            .map(item => ({ g: item.grid, t: item.visitTime }));
+        const toSave = routeData.filter(item => item.visited).map(item => ({ g: item.grid, t: item.visitTime }));
         localStorage.setItem('scatter_v2_progress', JSON.stringify(toSave));
     }
 
-    // 4. GPS & DISTANCE
     function startTracking() {
         if (!navigator.geolocation) return;
-
         navigator.geolocation.watchPosition((pos) => {
             const { latitude, longitude, accuracy } = pos.coords;
-            document.getElementById('gps-status').innerHTML = 
-                `GPS ACTIVE | Acc: <span class="accuracy-tag">±${Math.round(accuracy)}m</span>`;
-
+            document.getElementById('gps-status').innerHTML = `GPS ACTIVE | Acc: <span class="accuracy-tag">±${Math.round(accuracy)}m</span>`;
             routeData.forEach((point, i) => {
                 if (!point.visited && point.coords) {
                     const [pLat, pLon] = point.coords.split(',').map(n => parseFloat(n.trim()));
-                    const dist = getDistance(latitude, longitude, pLat, pLon);
-                    if (dist < RADIUS_METERS) markVisited(i);
+                    if (getDistance(latitude, longitude, pLat, pLon) < RADIUS_METERS) markVisited(i);
                 }
             });
-        }, (err) => {
-            document.getElementById('gps-status').innerText = "GPS Error: Check Location Settings";
-        }, { enableHighAccuracy: true, maximumAge: 0 });
+        }, null, { enableHighAccuracy: true, maximumAge: 0 });
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
@@ -164,28 +158,19 @@
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    // 5. SCREEN WAKE LOCK
     async function setupWakeLock() {
         if ('wakeLock' in navigator) {
-            try {
-                wakeLock = await navigator.wakeLock.request('screen');
-            } catch (err) {}
+            try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
         }
     }
 
     document.addEventListener('visibilitychange', async () => {
-        if (wakeLock !== null && document.visibilityState === 'visible') {
-            setupWakeLock();
-        }
+        if (wakeLock !== null && document.visibilityState === 'visible') setupWakeLock();
     });
 
-    // 6. CUSTOM MODAL CONTROLS
     function openResetModal() { document.getElementById('reset-modal').style.display = 'block'; }
     function closeResetModal() { document.getElementById('reset-modal').style.display = 'none'; }
-    function executeReset() {
-        localStorage.removeItem('scatter_v2_progress');
-        location.reload();
-    }
+    function executeReset() { localStorage.removeItem('scatter_v2_progress'); location.reload(); }
 
     init();
 </script>
