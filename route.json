@@ -1,7 +1,7 @@
 {
   "eventName": "Metropole Challenge",
   "route": [
-    { "grid": "SN 311 440", "coords": "52.180959,-4.126215", "points": 10 },
+    { "grid": "SN 311 440", "coords": "52.146883,-4.056927", "points": 10 },
     { "grid": "SN 319 470", "coords": "52.176882,-4.131361", "points": 10 },
     { "grid": "SN 340 476", "coords": "52.163325,-4.131747", "points": 5 },
     { "grid": "SN 329 497", "coords": "52.153771,-4.120973", "points": 10 },
