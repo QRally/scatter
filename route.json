@@ -1,5 +1,5 @@
 {
-  "eventName": "Everybody Scatter",
+  "eventName": "GeoScatter",
   "route": [
     { "grid": "SN 57 48", "coords": "52.180959,-4.126215", "points": 10 },
     { "grid": "SN 56 49", "coords": "52.176882,-4.131361", "points": 10 },
